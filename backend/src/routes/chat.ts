@@ -9,22 +9,29 @@ import {
   ChatMessage,
 } from "../types/chat";
 import { getMemories, saveMemory } from "../services/dynamodb";
-import { authenticateToken } from "../middleware/auth";
 import { extractMemoryFromMessage } from "../services/memoryExtraction";
+import { config } from "../config";
 
 export const chatRouter = Router();
 
 const MAX_MESSAGE_LENGTH = 10000;
 
+export interface MemoryAugmentationResult {
+  systemPrompt: string | undefined;
+  augmentedPrompt: string;
+  memoriesUsed: boolean;
+  memoryCount: number;
+}
+
 export async function buildMessageWithMemories(
   userId: string,
   message: string
-): Promise<{ augmentedPrompt: string; memoriesUsed: boolean; memoryCount: number }> {
+): Promise<MemoryAugmentationResult> {
   try {
     const memories = await getMemories(userId);
 
     if (memories.length === 0) {
-      return { augmentedPrompt: message, memoriesUsed: false, memoryCount: 0 };
+      return { systemPrompt: undefined, augmentedPrompt: message, memoriesUsed: false, memoryCount: 0 };
     }
 
     // Take up to 15 relevant memories and present in chronological order
@@ -38,24 +45,21 @@ export async function buildMessageWithMemories(
 
     console.log(`[Memory Debug] Retrieved ${selectedMemories.length} memories for user: ${userId}`);
 
-    const prompt = `You are a helpful assistant with long-term memory.
-
+    const systemPrompt = `You are a helpful assistant with long-term memory. You remember facts about the user across conversations.
 Relevant information remembered about the user:
 ${memoryContext}
 
-Use these memories when relevant to answer the user's question. Do not invent personal information. If the memories do not answer the question, say so naturally.
-
-User's current message:
-${message}`;
+Use these saved memories when relevant to answer the user's questions accurately. Do not invent contradictory personal information.`;
 
     return {
-      augmentedPrompt: prompt,
+      systemPrompt,
+      augmentedPrompt: message,
       memoriesUsed: true,
       memoryCount: selectedMemories.length,
     };
   } catch (error) {
     console.error("Failed to retrieve memories:", error);
-    return { augmentedPrompt: message, memoriesUsed: false, memoryCount: 0 };
+    return { systemPrompt: undefined, augmentedPrompt: message, memoriesUsed: false, memoryCount: 0 };
   }
 }
 
@@ -232,7 +236,6 @@ chatRouter.get(
  */
 chatRouter.post(
   "/chat",
-  authenticateToken,
   async (
     req: Request<unknown, unknown, ChatRequest>,
     res: Response<ChatResponse | ErrorResponse>,
@@ -245,7 +248,13 @@ chatRouter.post(
       });
     }
 
-    const userId = req.user!.userId;
+    // Default to configured development user ID (e.g. "test-user-1") for local usage without auth
+    const userId =
+      (req.body && (req.body as any).userId) ||
+      (req.headers["x-user-id"] as string) ||
+      config.defaultUserId ||
+      "test-user-1";
+
     const { message, messages } = req.body;
 
     // Validate presence of at least one input format
@@ -271,11 +280,11 @@ chatRouter.post(
       }
 
       try {
-        // Retrieve saved memories for the authenticated user and include them in the prompt
+        // Retrieve saved memories from DynamoDB and build context as system prompt
         const memoryResult = await buildMessageWithMemories(userId, trimmed);
 
-        // Generate a reply using Amazon Bedrock
-        const reply = await bedrockService.generateReply(memoryResult.augmentedPrompt);
+        // Generate a reply using Amazon Bedrock with memory context
+        const reply = await bedrockService.generateReply(trimmed, memoryResult.systemPrompt);
 
         // Intelligently evaluate whether this message contains personal facts/preferences to remember
         const memoryExtract = extractMemoryFromMessage(trimmed);
@@ -327,9 +336,14 @@ chatRouter.post(
       }
 
       try {
-        // Augment the last user message with long-term memories
+        // Augment with long-term memories from the last user message
         const lastUserIdx = [...messages].reverse().findIndex((m) => m.role === "user");
-        let memoryResult = { augmentedPrompt: "", memoriesUsed: false, memoryCount: 0 };
+        let memoryResult: MemoryAugmentationResult = {
+          systemPrompt: undefined,
+          augmentedPrompt: "",
+          memoriesUsed: false,
+          memoryCount: 0,
+        };
 
         const formattedMessages = messages.map((m) => ({ ...m }));
 
@@ -337,7 +351,6 @@ chatRouter.post(
           const actualIdx = messages.length - 1 - lastUserIdx;
           const userContent = messages[actualIdx].content;
           memoryResult = await buildMessageWithMemories(userId, userContent);
-          formattedMessages[actualIdx].content = memoryResult.augmentedPrompt;
 
           // Intelligently save personal facts from the last user message
           const memoryExtract = extractMemoryFromMessage(userContent);
@@ -350,7 +363,7 @@ chatRouter.post(
           }
         }
 
-        const reply = await bedrockService.generateReply(formattedMessages);
+        const reply = await bedrockService.generateReply(formattedMessages, memoryResult.systemPrompt);
 
         return res.status(200).json({
           reply,

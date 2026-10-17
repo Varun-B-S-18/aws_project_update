@@ -13,12 +13,16 @@ const allowedOrigin = config.frontendUrl;
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (curl, postman, server-to-server) or matching origin
-      if (!origin || origin === allowedOrigin || allowedOrigin === "*") {
+      // Allow requests with no origin (curl, postman, server-to-server), matching origin, or local dev origins
+      if (
+        !origin ||
+        origin === allowedOrigin ||
+        allowedOrigin === "*" ||
+        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+      ) {
         callback(null, true);
       } else {
-        // Fallback for local development
-        callback(null, true);
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
       }
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],

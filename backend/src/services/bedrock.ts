@@ -61,8 +61,12 @@ export class BedrockService {
   /**
    * Invokes Amazon Bedrock Converse API with user prompt string or conversation history.
    * Uses ConverseCommand and validates output.
+   * Supports an optional systemPrompt for context/memory instructions.
    */
-  public async generateReply(input: string | ChatMessage[]): Promise<string> {
+  public async generateReply(
+    input: string | ChatMessage[],
+    systemPrompt?: string
+  ): Promise<string> {
     const messages: ChatMessage[] = typeof input === 'string'
       ? [{ role: 'user', content: input }]
       : input;
@@ -82,13 +86,14 @@ export class BedrockService {
     }));
 
     // Log diagnostic metadata without logging full message contents or sensitive data
-    console.log(`[BedrockService] Invoking model: ${modelId} (Region: ${region}, MessageCount: ${messages.length})`);
+    console.log(`[BedrockService] Invoking model: ${modelId} (Region: ${region}, MessageCount: ${messages.length}, HasSystemPrompt: ${Boolean(systemPrompt)})`);
 
     try {
       const maxTokens = parseInt(process.env.BEDROCK_MAX_TOKENS || '2048', 10);
       const command = new ConverseCommand({
         modelId,
         messages: bedrockMessages,
+        system: systemPrompt ? [{ text: systemPrompt }] : undefined,
         inferenceConfig: {
           maxTokens: isNaN(maxTokens) ? 2048 : maxTokens,
           temperature: 0.7,
@@ -121,8 +126,11 @@ export class BedrockService {
   /**
    * Alias for generateReply to maintain full backwards compatibility.
    */
-  public async generateResponse(input: string | ChatMessage[]): Promise<string> {
-    return this.generateReply(input);
+  public async generateResponse(
+    input: string | ChatMessage[],
+    systemPrompt?: string
+  ): Promise<string> {
+    return this.generateReply(input, systemPrompt);
   }
 
   /**
@@ -164,6 +172,6 @@ export const bedrockService = new BedrockService();
  * Reusable standalone function as required by specification:
  * generateReply(message: string): Promise<string>
  */
-export async function generateReply(message: string): Promise<string> {
-  return bedrockService.generateReply(message);
+export async function generateReply(message: string, systemPrompt?: string): Promise<string> {
+  return bedrockService.generateReply(message, systemPrompt);
 }

@@ -7,20 +7,31 @@ import {
   deleteMemory,
   deleteAllMemories,
 } from "../services/dynamodb";
-import { authenticateToken } from "../middleware/auth";
+import { config } from "../config";
 
 export const memoryRouter = Router();
 
-// Apply authentication middleware to all memory routes
-memoryRouter.use(authenticateToken);
+/**
+ * Resolves the target user ID for memory operations in local development.
+ * Defaults to "test-user-1" without requiring authentication.
+ */
+function getUserId(req: Request): string {
+  return (
+    (req.query?.userId as string) ||
+    (req.body && req.body.userId) ||
+    (req.headers["x-user-id"] as string) ||
+    config.defaultUserId ||
+    "test-user-1"
+  );
+}
 
 /**
  * GET /api/memories
- * Retrieves all stored memories belonging to the authenticated user.
+ * Retrieves all stored memories for the development user.
  */
 memoryRouter.get("/memories", async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId;
+    const userId = getUserId(req);
     const memories = await getMemories(userId);
 
     return res.status(200).json({
@@ -38,11 +49,10 @@ memoryRouter.get("/memories", async (req: Request, res: Response) => {
 
 /**
  * GET /api/memories/:identifier
- * Supports fetching a specific memory by recordId, or fetching memories by userId (strictly authorized).
+ * Supports fetching a specific memory by recordId, or fetching memories by userId.
  */
 memoryRouter.get("/memories/:identifier", async (req: Request, res: Response) => {
   try {
-    const authUserId = req.user!.userId;
     const identifier = req.params.identifier;
 
     if (!identifier || identifier.length > 128) {
@@ -52,22 +62,15 @@ memoryRouter.get("/memories/:identifier", async (req: Request, res: Response) =>
       });
     }
 
-    // Backward-compatible check: if the client requested /api/memories/:userId
-    if (identifier === authUserId) {
-      const memories = await getMemories(authUserId);
+    // Check if identifier is a userId
+    if (identifier.startsWith("user-") || identifier.startsWith("test-user-")) {
+      const memories = await getMemories(identifier);
       return res.status(200).json({ memories, count: memories.length });
     }
 
-    // If identifier is for another user, strictly deny access
-    if (identifier.startsWith("user-") && identifier !== authUserId) {
-      return res.status(403).json({
-        error: "Access denied. You cannot access another user's memories.",
-        code: "FORBIDDEN",
-      });
-    }
-
-    // Treat identifier as a recordId for the authenticated user
-    const memory = await getMemoryById(authUserId, identifier);
+    // Treat identifier as a recordId
+    const userId = getUserId(req);
+    const memory = await getMemoryById(userId, identifier);
 
     if (!memory) {
       return res.status(404).json({
@@ -88,12 +91,11 @@ memoryRouter.get("/memories/:identifier", async (req: Request, res: Response) =>
 
 /**
  * POST /api/memory
- * Creates a new memory for the authenticated user.
- * Client-supplied userId is ignored for security.
+ * Creates a new memory for the user.
  */
 memoryRouter.post("/memory", async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId;
+    const userId = getUserId(req);
     const { content, category } = req.body || {};
 
     if (typeof content !== "string" || !content.trim()) {
@@ -129,11 +131,11 @@ memoryRouter.post("/memory", async (req: Request, res: Response) => {
 
 /**
  * PUT /api/memories/:recordId
- * Updates an existing memory belonging to the authenticated user.
+ * Updates an existing memory record.
  */
 memoryRouter.put("/memories/:recordId", async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId;
+    const userId = getUserId(req);
     const recordId = req.params.recordId;
     const { content } = req.body || {};
 
@@ -164,7 +166,7 @@ memoryRouter.put("/memories/:recordId", async (req: Request, res: Response) => {
 
     if (!updated) {
       return res.status(404).json({
-        error: "Memory record not found or does not belong to you",
+        error: "Memory record not found",
         code: "NOT_FOUND",
       });
     }
@@ -184,11 +186,11 @@ memoryRouter.put("/memories/:recordId", async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/memories/:recordId
- * Deletes a single memory record belonging to the authenticated user.
+ * Deletes a single memory record.
  */
 memoryRouter.delete("/memories/:recordId", async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId;
+    const userId = getUserId(req);
     const recordId = req.params.recordId;
 
     if (!recordId || recordId.length > 128) {
@@ -202,7 +204,7 @@ memoryRouter.delete("/memories/:recordId", async (req: Request, res: Response) =
 
     if (!deleted) {
       return res.status(404).json({
-        error: "Memory record not found or does not belong to you",
+        error: "Memory record not found",
         code: "NOT_FOUND",
       });
     }
@@ -222,11 +224,11 @@ memoryRouter.delete("/memories/:recordId", async (req: Request, res: Response) =
 
 /**
  * DELETE /api/memories
- * Clears all memories belonging to the authenticated user.
+ * Clears all memories belonging to the user.
  */
 memoryRouter.delete("/memories", async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId;
+    const userId = getUserId(req);
     const deletedCount = await deleteAllMemories(userId);
 
     return res.status(200).json({

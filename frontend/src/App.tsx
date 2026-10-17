@@ -91,6 +91,8 @@ export function App() {
           role: 'assistant',
           content: assistantReplyText,
           timestamp: formatTimestamp(),
+          memoriesUsed: data.memoriesUsed,
+          memoryCount: data.memoryCount,
         };
 
         setMessages((prev) => [...prev, assistantMessage]);

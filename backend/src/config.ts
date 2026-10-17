@@ -9,12 +9,7 @@ export const config = {
   awsRegion: process.env.AWS_REGION || 'ap-southeast-2',
   bedrockModelId: process.env.BEDROCK_MODEL_ID || 'amazon.nova-micro-v1:0',
   maxTokens: parseInt(process.env.BEDROCK_MAX_TOKENS || '2048', 10),
-  // Amazon Cognito configuration
-  cognitoUserPoolId: process.env.COGNITO_USER_POOL_ID || '',
-  cognitoClientId: process.env.COGNITO_CLIENT_ID || '',
-  cognitoRegion: process.env.COGNITO_REGION || process.env.AWS_REGION || 'ap-southeast-2',
-  // DynamoDB configuration
+  defaultUserId: process.env.DEFAULT_USER_ID || 'test-user-1',
   dynamoDbTableName: process.env.DYNAMODB_TABLE_NAME || 'LongTermMemory',
-  // Node environment
   nodeEnv: process.env.NODE_ENV || 'development',
 };

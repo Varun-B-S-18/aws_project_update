@@ -25,15 +25,15 @@ export const Header: React.FC<HeaderProps> = ({
                 Long-Term Memory Assistant
               </h1>
               <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800">
-                Phase 1 • AI Chat
+                Bedrock + DynamoDB
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
-              <span>Foundation Architecture</span>
+              <span>Amazon Nova</span>
               <span className="inline-block w-1 h-1 rounded-full bg-slate-600" />
-              <span className="text-amber-400/90 flex items-center gap-1">
+              <span className="text-emerald-400 flex items-center gap-1">
                 <Sparkles className="w-3 h-3" />
-                Session Context Only (No Long-Term Memory in Phase 1)
+                Persistent Memory Active
               </span>
             </p>
           </div>
@@ -70,4 +70,3 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
-

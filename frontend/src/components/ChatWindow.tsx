@@ -26,9 +26,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [messages, isLoading]);
 
   const starterPrompts = [
+    'What is my secret project code name?',
+    'Which university am I studying at?',
     'Explain machine learning in simple terms',
-    'What is the difference between SQL and NoSQL?',
-    'How does Amazon Bedrock work?',
     'What are the key principles of clean code?',
   ];
 
@@ -47,16 +47,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </h2>
 
             <p className="text-sm text-slate-400 max-w-md leading-relaxed mb-6">
-              You are currently running <span className="text-indigo-300 font-medium">Phase 1 (Basic AI Chat)</span>.
-              The assistant communicates directly with Amazon Bedrock with in-session context.
+              Powered by <span className="text-indigo-300 font-medium">Amazon Bedrock</span> and persistent memory with <span className="text-indigo-300 font-medium">Amazon DynamoDB</span>.
             </p>
 
             <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 max-w-lg mb-8 flex items-start gap-2.5 text-left">
-              <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-medium text-slate-200">Phase 1 Architecture Note:</span>
+                <span className="font-medium text-slate-200">Long-Term Memory Active:</span>
                 <p className="mt-0.5">
-                  Conversations are maintained in memory for this session only. Permanent vector & graph memory will be introduced in subsequent phases.
+                  Personal facts, preferences, and project details mentioned during chat are securely persisted in DynamoDB and recalled in subsequent responses.
                 </p>
               </div>
             </div>

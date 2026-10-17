@@ -94,7 +94,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         <div className="flex justify-between items-center mt-2 px-1 text-[11px] text-slate-500">
           <span>Press Enter to send, Shift + Enter for newline</span>
-          <span>Phase 1 • No persistent memory</span>
+          <span className="text-emerald-500/80">Persistent memory active (Amazon DynamoDB)</span>
         </div>
       </div>
     </div>

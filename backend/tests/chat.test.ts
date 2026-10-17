@@ -28,9 +28,24 @@ jest.mock('../src/services/dynamodb', () => ({
   updateMemory: jest.fn(),
   deleteMemory: jest.fn(),
   deleteAllMemories: jest.fn(),
+  saveChatMessage: jest.fn().mockImplementation((userId, role, content, extra) =>
+    Promise.resolve({
+      userId,
+      recordId: `chat-${Date.now()}-mock`,
+      role,
+      content,
+      createdAt: new Date().toISOString(),
+      category: 'chat_message',
+      ...extra,
+    })
+  ),
+  getChatHistory: jest.fn().mockResolvedValue([]),
+  clearChatHistory: jest.fn().mockResolvedValue(0),
 }));
 
-describe('Backend API - Long-Term Memory Assistant Suite', () => {
+const AUTH_HEADER = { Authorization: 'Bearer test-token-test-user-1' };
+
+describe('Backend API - Secure Long-Term Memory Assistant Suite', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (dynamodbService.getMemories as jest.Mock).mockResolvedValue([]);
@@ -45,17 +60,15 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
     );
   });
 
-  describe('GET /api/health (Public Endpoint)', () => {
-    it('should return status ok with 200 status code', async () => {
+  describe('Public Health Endpoints', () => {
+    it('GET /api/health should return status ok with 200 status code', async () => {
       const response = await request(app).get('/api/health');
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ status: 'ok' });
     });
-  });
 
-  describe('GET /api/health/bedrock (Public Endpoint)', () => {
-    it('should return configured status without invoking model when test flag is absent', async () => {
+    it('GET /api/health/bedrock should return configured status without invoking model', async () => {
       const response = await request(app).get('/api/health/bedrock');
 
       expect(response.status).toBe(200);
@@ -65,7 +78,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
       expect(bedrockService.testInvocation).not.toHaveBeenCalled();
     });
 
-    it('should return connected status when test=true and invocation succeeds', async () => {
+    it('GET /api/health/bedrock?test=true should return connected status on success', async () => {
       (bedrockService.testInvocation as jest.Mock).mockResolvedValueOnce({
         ok: true,
         latencyMs: 142,
@@ -81,7 +94,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
       expect(bedrockService.testInvocation).toHaveBeenCalledTimes(1);
     });
 
-    it('should report configuration error when env vars are missing', async () => {
+    it('GET /api/health/bedrock should report configuration error when config is missing', async () => {
       (bedrockService.checkConfiguration as jest.Mock).mockReturnValueOnce({
         ok: false,
         error: 'Missing required AWS Region configuration.',
@@ -94,7 +107,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
       expect(response.body.code).toBe('CONFIGURATION_ERROR');
     });
 
-    it('should return safe diagnostic error when test=true fails with AWS error', async () => {
+    it('GET /api/health/bedrock?test=true should return safe diagnostic error on AWS error', async () => {
       const awsError = new Error('AccessDeniedException: User is not authorized');
       awsError.name = 'AccessDeniedException';
       (bedrockService.testInvocation as jest.Mock).mockRejectedValueOnce(awsError);
@@ -108,34 +121,32 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
     });
   });
 
-  describe('No Authentication Required (Local Development)', () => {
-    it('should accept chat requests without an Authorization header', async () => {
-      const mockAiReply = 'Hello, how can I assist you?';
-      (bedrockService.generateReply as jest.Mock).mockResolvedValueOnce(mockAiReply);
-
+  describe('Authentication Enforcement', () => {
+    it('should reject unauthenticated chat requests with 401 Unauthorized', async () => {
       const response = await request(app)
         .post('/api/chat')
         .send({ message: 'Hello without token' });
 
-      expect(response.status).toBe(200);
-      expect(response.body.reply).toBe(mockAiReply);
+      expect(response.status).toBe(401);
+      expect(response.body.code).toBe('UNAUTHORIZED');
     });
 
-    it('should accept memory requests without an Authorization header', async () => {
+    it('should reject unauthenticated memory requests with 401 Unauthorized', async () => {
       const response = await request(app).get('/api/memories');
 
-      expect(response.status).toBe(200);
-      expect(response.body.memories).toEqual([]);
+      expect(response.status).toBe(401);
+      expect(response.body.code).toBe('UNAUTHORIZED');
     });
   });
 
-  describe('POST /api/chat', () => {
+  describe('POST /api/chat (Authenticated)', () => {
     it('should return 200 with reply and message for a valid single message without memories', async () => {
       const mockAiReply = 'Artificial intelligence is computer systems performing human-like tasks.';
       (bedrockService.generateReply as jest.Mock).mockResolvedValueOnce(mockAiReply);
 
       const response = await request(app)
         .post('/api/chat')
+        .set(AUTH_HEADER)
         .send({ message: 'Explain artificial intelligence in simple terms.' });
 
       expect(response.status).toBe(200);
@@ -163,6 +174,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
 
       const response = await request(app)
         .post('/api/chat')
+        .set(AUTH_HEADER)
         .send({ message: 'What is my secret project code name?' });
 
       expect(response.status).toBe(200);
@@ -180,6 +192,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
 
       await request(app)
         .post('/api/chat')
+        .set(AUTH_HEADER)
         .send({ message: 'My secret project code name is BlueTiger739.' });
 
       expect(dynamodbService.saveMemory).toHaveBeenCalledWith(
@@ -195,6 +208,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
 
       await request(app)
         .post('/api/chat')
+        .set(AUTH_HEADER)
         .send({ message: 'What is the time complexity of binary search?' });
 
       expect(dynamodbService.saveMemory).not.toHaveBeenCalled();
@@ -203,6 +217,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
     it('should return 400 when message is empty string', async () => {
       const response = await request(app)
         .post('/api/chat')
+        .set(AUTH_HEADER)
         .send({ message: '   ' });
 
       expect(response.status).toBe(400);
@@ -214,6 +229,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
       const longMessage = 'A'.repeat(10001);
       const response = await request(app)
         .post('/api/chat')
+        .set(AUTH_HEADER)
         .send({ message: longMessage });
 
       expect(response.status).toBe(400);
@@ -228,6 +244,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
 
       const response = await request(app)
         .post('/api/chat')
+        .set(AUTH_HEADER)
         .send({ message: 'Hello Bedrock' });
 
       expect(response.status).toBe(403);
@@ -243,6 +260,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
 
       const response = await request(app)
         .post('/api/chat')
+        .set(AUTH_HEADER)
         .send({ message: 'Explain quantum computing' });
 
       expect(response.status).toBe(500);
@@ -255,7 +273,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
   });
 
   describe('Memory Management Endpoints (/api/memories)', () => {
-    it('GET /api/memories should retrieve memories for development user', async () => {
+    it('GET /api/memories should retrieve memories for authenticated user only', async () => {
       const mockMemories = [
         {
           userId: 'test-user-1',
@@ -266,16 +284,19 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
       ];
       (dynamodbService.getMemories as jest.Mock).mockResolvedValueOnce(mockMemories);
 
-      const response = await request(app).get('/api/memories');
+      const response = await request(app)
+        .get('/api/memories')
+        .set(AUTH_HEADER);
 
       expect(response.status).toBe(200);
       expect(response.body.memories).toEqual(mockMemories);
       expect(dynamodbService.getMemories).toHaveBeenCalledWith('test-user-1');
     });
 
-    it('POST /api/memory should save a memory for development user', async () => {
+    it('POST /api/memory should save a memory for authenticated user', async () => {
       const response = await request(app)
         .post('/api/memory')
+        .set(AUTH_HEADER)
         .send({ content: 'I prefer TypeScript over JavaScript' });
 
       expect(response.status).toBe(201);
@@ -287,7 +308,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
       );
     });
 
-    it('PUT /api/memories/:recordId should update a memory for user', async () => {
+    it('PUT /api/memories/:recordId should update a memory for authenticated user', async () => {
       (dynamodbService.updateMemory as jest.Mock).mockResolvedValueOnce({
         userId: 'test-user-1',
         recordId: 'mem-1',
@@ -298,6 +319,7 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
 
       const response = await request(app)
         .put('/api/memories/mem-1')
+        .set(AUTH_HEADER)
         .send({ content: 'Updated content' });
 
       expect(response.status).toBe(200);
@@ -309,20 +331,24 @@ describe('Backend API - Long-Term Memory Assistant Suite', () => {
       );
     });
 
-    it('DELETE /api/memories/:recordId should delete a single memory', async () => {
+    it('DELETE /api/memories/:recordId should delete a single memory for authenticated user', async () => {
       (dynamodbService.deleteMemory as jest.Mock).mockResolvedValueOnce(true);
 
-      const response = await request(app).delete('/api/memories/mem-1');
+      const response = await request(app)
+        .delete('/api/memories/mem-1')
+        .set(AUTH_HEADER);
 
       expect(response.status).toBe(200);
       expect(response.body.message).toBe('Memory deleted successfully');
       expect(dynamodbService.deleteMemory).toHaveBeenCalledWith('test-user-1', 'mem-1');
     });
 
-    it('DELETE /api/memories should clear all memories for user', async () => {
+    it('DELETE /api/memories should clear all memories for authenticated user', async () => {
       (dynamodbService.deleteAllMemories as jest.Mock).mockResolvedValueOnce(5);
 
-      const response = await request(app).delete('/api/memories');
+      const response = await request(app)
+        .delete('/api/memories')
+        .set(AUTH_HEADER);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(5);

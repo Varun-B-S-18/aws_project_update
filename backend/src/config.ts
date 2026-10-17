@@ -11,5 +11,9 @@ export const config = {
   maxTokens: parseInt(process.env.BEDROCK_MAX_TOKENS || '2048', 10),
   defaultUserId: process.env.DEFAULT_USER_ID || 'test-user-1',
   dynamoDbTableName: process.env.DYNAMODB_TABLE_NAME || 'LongTermMemory',
+  // Amazon Cognito configuration
+  cognitoUserPoolId: process.env.COGNITO_USER_POOL_ID || '',
+  cognitoClientId: process.env.COGNITO_CLIENT_ID || '',
+  cognitoRegion: process.env.COGNITO_REGION || process.env.AWS_REGION || 'ap-southeast-2',
   nodeEnv: process.env.NODE_ENV || 'development',
 };

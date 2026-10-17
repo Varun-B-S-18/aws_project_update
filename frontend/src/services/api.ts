@@ -1,4 +1,11 @@
-import { ChatApiResponse, ChatApiError, HealthResponse, BedrockHealthResponse, MessageRole } from '../types/chat';
+import {
+  ChatApiResponse,
+  ChatApiError,
+  HealthResponse,
+  BedrockHealthResponse,
+  MessageRole,
+  Message,
+} from '../types/chat';
 import { Memory } from '../types/memory';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
@@ -6,6 +13,12 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_U
 async function requestApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers || {});
   headers.set('Content-Type', 'application/json');
+
+  // Inject Bearer token from localStorage if present
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
@@ -15,6 +28,9 @@ async function requestApi<T>(endpoint: string, options: RequestInit = {}): Promi
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    if (response.status === 401) {
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+    }
     const errorData = data as ChatApiError;
     const error = new Error(errorData.error || `HTTP error ${response.status}`);
     (error as Error & { code?: string; status: number }).code = errorData.code;
@@ -51,6 +67,21 @@ export const api = {
         messages: history && history.length > 0 ? history : undefined,
       }),
     });
+  },
+
+  /**
+   * Conversation History APIs (Amazon DynamoDB persistence)
+   */
+  async getChatHistory(): Promise<Message[]> {
+    const data = await requestApi<{ messages: Message[] }>('/api/chat/history');
+    return data.messages || [];
+  },
+
+  async clearChatHistory(): Promise<number> {
+    const data = await requestApi<{ success: boolean; count: number }>('/api/chat/history', {
+      method: 'DELETE',
+    });
+    return data.count || 0;
   },
 
   /**

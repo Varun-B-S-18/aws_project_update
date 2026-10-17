@@ -8,8 +8,15 @@ import {
   BedrockHealthResponse,
   ChatMessage,
 } from "../types/chat";
-import { getMemories, saveMemory } from "../services/dynamodb";
+import {
+  getMemories,
+  saveMemory,
+  saveChatMessage,
+  getChatHistory,
+  clearChatHistory,
+} from "../services/dynamodb";
 import { extractMemoryFromMessage } from "../services/memoryExtraction";
+import { authenticateToken } from "../middleware/auth";
 import { config } from "../config";
 
 export const chatRouter = Router();
@@ -28,7 +35,15 @@ export async function buildMessageWithMemories(
   message: string
 ): Promise<MemoryAugmentationResult> {
   try {
-    const memories = await getMemories(userId);
+    let memories = await getMemories(userId);
+
+    // In local development, if a user has no memories yet, fall back to template memories
+    if (memories.length === 0 && (userId.startsWith('dev-') || config.nodeEnv !== 'production')) {
+      const defaultMemories = await getMemories('test-user-1');
+      if (defaultMemories.length > 0) {
+        memories = defaultMemories;
+      }
+    }
 
     if (memories.length === 0) {
       return { systemPrompt: undefined, augmentedPrompt: message, memoriesUsed: false, memoryCount: 0 };
@@ -236,6 +251,7 @@ chatRouter.get(
  */
 chatRouter.post(
   "/chat",
+  authenticateToken,
   async (
     req: Request<unknown, unknown, ChatRequest>,
     res: Response<ChatResponse | ErrorResponse>,
@@ -248,12 +264,8 @@ chatRouter.post(
       });
     }
 
-    // Default to configured development user ID (e.g. "test-user-1") for local usage without auth
-    const userId =
-      (req.body && (req.body as any).userId) ||
-      (req.headers["x-user-id"] as string) ||
-      config.defaultUserId ||
-      "test-user-1";
+    // Authenticated user ID derived strictly from verified token (sub claim)
+    const userId = req.user!.userId;
 
     const { message, messages } = req.body;
 
@@ -280,13 +292,30 @@ chatRouter.post(
       }
 
       try {
-        // Retrieve saved memories from DynamoDB and build context as system prompt
+        // 1. Save incoming user message to DynamoDB
+        try {
+          await saveChatMessage(userId, "user", trimmed);
+        } catch (chatErr) {
+          console.error("[ChatRoute] Non-fatal error saving user message to DynamoDB:", chatErr);
+        }
+
+        // 2. Retrieve saved memories from DynamoDB and build context as system prompt
         const memoryResult = await buildMessageWithMemories(userId, trimmed);
 
-        // Generate a reply using Amazon Bedrock with memory context
+        // 3. Generate a reply using Amazon Bedrock with memory context
         const reply = await bedrockService.generateReply(trimmed, memoryResult.systemPrompt);
 
-        // Intelligently evaluate whether this message contains personal facts/preferences to remember
+        // 4. Save AI reply to DynamoDB
+        try {
+          await saveChatMessage(userId, "assistant", reply, {
+            memoriesUsed: memoryResult.memoriesUsed,
+            memoryCount: memoryResult.memoryCount,
+          });
+        } catch (chatErr) {
+          console.error("[ChatRoute] Non-fatal error saving assistant reply to DynamoDB:", chatErr);
+        }
+
+        // 5. Intelligently evaluate whether this message contains personal facts/preferences to remember
         const memoryExtract = extractMemoryFromMessage(trimmed);
         if (memoryExtract.shouldSave && memoryExtract.content) {
           try {
@@ -350,6 +379,14 @@ chatRouter.post(
         if (lastUserIdx !== -1) {
           const actualIdx = messages.length - 1 - lastUserIdx;
           const userContent = messages[actualIdx].content;
+
+          // Save incoming user message to DynamoDB
+          try {
+            await saveChatMessage(userId, "user", userContent);
+          } catch (chatErr) {
+            console.error("[ChatRoute] Non-fatal error saving user message to DynamoDB:", chatErr);
+          }
+
           memoryResult = await buildMessageWithMemories(userId, userContent);
 
           // Intelligently save personal facts from the last user message
@@ -364,6 +401,16 @@ chatRouter.post(
         }
 
         const reply = await bedrockService.generateReply(formattedMessages, memoryResult.systemPrompt);
+
+        // Save AI reply to DynamoDB
+        try {
+          await saveChatMessage(userId, "assistant", reply, {
+            memoriesUsed: memoryResult.memoriesUsed,
+            memoryCount: memoryResult.memoryCount,
+          });
+        } catch (chatErr) {
+          console.error("[ChatRoute] Non-fatal error saving assistant reply to DynamoDB:", chatErr);
+        }
 
         return res.status(200).json({
           reply,
@@ -384,4 +431,60 @@ chatRouter.post(
       error: "Message cannot be empty",
     });
   },
+);
+
+/**
+ * GET /api/chat/history
+ * Retrieves full conversation history saved in DynamoDB for the authenticated user.
+ */
+chatRouter.get(
+  "/chat/history",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const history = await getChatHistory(userId);
+      const formatted = history.map((m) => ({
+        id: m.recordId,
+        role: m.role,
+        content: m.content,
+        timestamp: new Date(m.createdAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        memoriesUsed: m.memoriesUsed,
+        memoryCount: m.memoryCount,
+      }));
+
+      return res.status(200).json({ messages: formatted });
+    } catch (error: unknown) {
+      console.error("[ChatRoute] Failed to load chat history from DynamoDB:", error);
+      return res.status(500).json({
+        error: "Failed to load chat history from DynamoDB.",
+        code: "DYNAMODB_ERROR",
+      });
+    }
+  }
+);
+
+/**
+ * DELETE /api/chat/history
+ * Clears conversation history saved in DynamoDB for the authenticated user.
+ */
+chatRouter.delete(
+  "/chat/history",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const deletedCount = await clearChatHistory(userId);
+      return res.status(200).json({ success: true, count: deletedCount });
+    } catch (error: unknown) {
+      console.error("[ChatRoute] Failed to clear chat history from DynamoDB:", error);
+      return res.status(500).json({
+        error: "Failed to clear chat history from DynamoDB.",
+        code: "DYNAMODB_ERROR",
+      });
+    }
+  }
 );

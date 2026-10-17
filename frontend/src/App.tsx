@@ -1,145 +1,107 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Header } from './components/Header';
-import { ChatWindow } from './components/ChatWindow';
-import { ChatInput } from './components/ChatInput';
-import { Message, ChatApiResponse, ChatApiError } from './types/chat';
+import React from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import { ChatProvider } from './context/ChatContext';
+import { AppLayout } from './components/layout/AppLayout';
+import { LandingPage } from './pages/LandingPage';
+import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ChatPage } from './pages/ChatPage';
+import { MemoryDashboard } from './pages/MemoryDashboard';
+import { SettingsPage } from './pages/SettingsPage';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-slate-950 text-slate-100">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-slate-400">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-slate-950 text-slate-100">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-slate-400">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/chat" replace />;
+  }
+
+  return <>{children}</>;
+}
 
 export function App() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [serverStatus, setServerStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
-
-  // Verify backend health on mount
-  useEffect(() => {
-    let isMounted = true;
-    const checkHealth = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/health`);
-        if (res.ok) {
-          if (isMounted) setServerStatus('connected');
-        } else {
-          if (isMounted) setServerStatus('disconnected');
-        }
-      } catch {
-        if (isMounted) setServerStatus('disconnected');
-      }
-    };
-
-    checkHealth();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const formatTimestamp = () => {
-    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const handleSendMessage = useCallback(
-    async (content: string) => {
-      const trimmed = content.trim();
-      if (!trimmed || isLoading) return;
-
-      // 1. Create and append user message immediately to the UI
-      const userMessage: Message = {
-        id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-        role: 'user',
-        content: trimmed,
-        timestamp: formatTimestamp(),
-      };
-
-      const updatedHistory = [...messages, userMessage];
-      setMessages(updatedHistory);
-      setIsLoading(true);
-      setError(null);
-
-      // 2. Prepare payload including conversation history context
-      const payloadMessages = updatedHistory.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-
-      try {
-        const response = await fetch(`${API_BASE}/api/chat`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            message: trimmed,
-            messages: payloadMessages,
-          }),
-        });
-
-        const data: ChatApiResponse & ChatApiError = await response.json();
-
-        if (!response.ok) {
-          const errorMessage = data?.error || 'Unable to generate a response. Please try again.';
-          setError(errorMessage);
-          setServerStatus('connected'); // Server is reachable, but operation failed
-          return;
-        }
-
-        // 3. Extract AI reply supporting both `reply` and `message` properties
-        const assistantReplyText = data.reply || data.message || '';
-
-        const assistantMessage: Message = {
-          id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-          role: 'assistant',
-          content: assistantReplyText,
-          timestamp: formatTimestamp(),
-          memoriesUsed: data.memoriesUsed,
-          memoryCount: data.memoryCount,
-        };
-
-        setMessages((prev) => [...prev, assistantMessage]);
-        setServerStatus('connected');
-      } catch (err: unknown) {
-        console.error('Network or chat API error:', err);
-        setError('Unable to reach the backend server. Please check that the server is running on port 5000.');
-        setServerStatus('disconnected');
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [messages, isLoading]
-  );
-
-  const handleClearChat = () => {
-    setMessages([]);
-    setError(null);
-  };
-
   return (
-    <div className="flex flex-col h-screen w-full bg-slate-950 text-slate-100 overflow-hidden">
-      {/* Top Header */}
-      <Header
-        onClearChat={handleClearChat}
-        messageCount={messages.length}
-        serverStatus={serverStatus}
+    <Routes>
+      {/* Public Pages */}
+      <Route path="/" element={<LandingPage />} />
+      <Route
+        path="/login"
+        element={
+          <PublicOnlyRoute>
+            <LoginPage />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/signup"
+        element={
+          <PublicOnlyRoute>
+            <SignupPage />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/forgot-password"
+        element={
+          <PublicOnlyRoute>
+            <ForgotPasswordPage />
+          </PublicOnlyRoute>
+        }
       />
 
-      {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col min-h-0 relative">
-        <ChatWindow
-          messages={messages}
-          isLoading={isLoading}
-          error={error}
-          onSelectPrompt={handleSendMessage}
-          onDismissError={() => setError(null)}
-        />
-      </main>
+      {/* Protected App Routes */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <ChatProvider>
+              <AppLayout />
+            </ChatProvider>
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/memories" element={<MemoryDashboard />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Route>
 
-      {/* Bottom Chat Input */}
-      <ChatInput
-        onSendMessage={handleSendMessage}
-        isLoading={isLoading}
-        disabled={serverStatus === 'disconnected' && messages.length === 0}
-      />
-    </div>
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

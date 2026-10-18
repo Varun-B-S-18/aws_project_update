@@ -1,37 +1,53 @@
-import { Request, Response, NextFunction } from 'express';
-import { CognitoJwtVerifier } from 'aws-jwt-verify';
-import { config } from '../config';
-import '../types/auth';
+import { SimpleJwksCache } from "aws-jwt-verify/jwk";
+import { CognitoIPv4Fetcher } from "../cognitoHttp";
+import { Request, Response, NextFunction } from "express";
+import { CognitoJwtVerifier } from "aws-jwt-verify";
+import { config } from "../config";
+import "../types/auth";
 
-// Cached verifier instance for performance
+// Cached Cognito verifier instance for performance
 let cognitoVerifier: ReturnType<typeof CognitoJwtVerifier.create> | null = null;
 
 function getCognitoVerifier() {
   if (!cognitoVerifier && config.cognitoUserPoolId && config.cognitoClientId) {
-    cognitoVerifier = CognitoJwtVerifier.create({
-      userPoolId: config.cognitoUserPoolId,
-      clientId: config.cognitoClientId,
-      tokenUse: null, // Accepts both ID and Access tokens
-    });
+    cognitoVerifier = CognitoJwtVerifier.create(
+      {
+        userPoolId: config.cognitoUserPoolId,
+        clientId: config.cognitoClientId,
+        tokenUse: "access",
+      },
+      {
+        jwksCache: new SimpleJwksCache({
+          fetcher: new CognitoIPv4Fetcher(),
+        }),
+      },
+    );
   }
+
   return cognitoVerifier;
 }
 
 /**
- * Authentication middleware that verifies Cognito JWTs.
- * Securely extracts the canonical user identity (sub) and attaches it to req.user.
+ * Authentication middleware.
+ *
+ * Verifies Cognito access tokens and attaches the authenticated
+ * user's identity to req.user.
+ *
+ * Development tokens are accepted only in development and test
+ * environments, and only when Cognito is not configured.
  */
 export async function authenticateToken(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  // 1. Validate the Authorization header
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({
-      error: 'Authentication required. Missing or malformed Bearer token in Authorization header.',
-      code: 'UNAUTHORIZED',
+      error: "Authentication required. Missing or malformed Bearer token.",
+      code: "UNAUTHORIZED",
     });
     return;
   }
@@ -40,58 +56,104 @@ export async function authenticateToken(
 
   if (!token) {
     res.status(401).json({
-      error: 'Authentication required. Bearer token is empty.',
-      code: 'UNAUTHORIZED',
+      error: "Authentication required. Bearer token is empty.",
+      code: "UNAUTHORIZED",
     });
     return;
   }
 
-  // 1. If Cognito is configured, verify signature, expiration, issuer and claims using aws-jwt-verify
+  // 2. Verify Cognito access tokens when Cognito is configured
   const verifier = getCognitoVerifier();
 
   if (verifier) {
     try {
       const payload = await verifier.verify(token);
+
       req.user = {
+        // Cognito's unique user identifier
         userId: payload.sub,
-        email: (payload.email as string) || (payload['cognito:username'] as string) || payload.sub,
-        username: (payload['cognito:username'] as string) || payload.sub,
-        name: (payload.name as string) || undefined,
+        email:
+          (payload.email as string | undefined) ||
+          (payload["cognito:username"] as string | undefined) ||
+          payload.sub,
+        username:
+          (payload["cognito:username"] as string | undefined) || payload.sub,
+        name: (payload.name as string | undefined) || undefined,
       };
+
       return next();
     } catch (err: unknown) {
-      console.warn('[AuthMiddleware] Token verification failed:', err instanceof Error ? err.message : err);
+      console.warn(
+        "[AuthMiddleware] Token verification failed:",
+        err instanceof Error ? err.message : err,
+      );
+
       res.status(401).json({
-        error: 'Invalid, malformed, or expired authentication token. Please log in again.',
-        code: 'TOKEN_INVALID',
+        error:
+          "Invalid, malformed, or expired authentication token. Please log in again.",
+        code: "TOKEN_INVALID",
       });
       return;
     }
   }
 
-  // 2. Fallback for test and local development when Cognito User Pool is not yet deployed:
-  // Strictly validate test/dev tokens in non-production environments
-  if (config.nodeEnv === 'test' || token.startsWith('test-token-') || token.startsWith('dev-token-')) {
-    let devUserId = 'test-user-1';
-    let devEmail = 'test@example.com';
-    let devName = 'Test User';
+  // 3. Allow development tokens only when Cognito is not configured
+  //    and the server is running in development or test mode.
+  const isNonProduction =
+    config.nodeEnv === "development" || config.nodeEnv === "test";
 
-    if (token.startsWith('test-token-')) {
-      const suffix = token.replace('test-token-', '');
+  const isDevelopmentToken =
+    token.startsWith("test-token-") || token.startsWith("dev-token-");
+
+  const cognitoIsNotConfigured =
+    !config.cognitoUserPoolId || !config.cognitoClientId;
+
+  if (isNonProduction && isDevelopmentToken && cognitoIsNotConfigured) {
+    let devUserId = "test-user-1";
+    let devEmail = "test@example.com";
+    let devName = "Test User";
+
+    // Handle test-token-<userId>
+    if (token.startsWith("test-token-")) {
+      const suffix = token.substring("test-token-".length);
+
       if (suffix) {
         devUserId = suffix;
         devEmail = `${suffix}@example.com`;
         devName = suffix;
       }
-    } else if (token.startsWith('dev-token-')) {
+    }
+
+    // Handle dev-token-<base64-encoded-user-payload>
+    else if (token.startsWith("dev-token-")) {
       try {
-        const raw = Buffer.from(token.replace('dev-token-', ''), 'base64').toString('utf-8');
-        const parsed = JSON.parse(raw);
-        if (parsed.userId) devUserId = parsed.userId;
-        if (parsed.email) devEmail = parsed.email;
-        if (parsed.name) devName = parsed.name;
+        const encodedPayload = token.substring("dev-token-".length);
+
+        const raw = Buffer.from(encodedPayload, "base64").toString("utf-8");
+
+        const parsed: {
+          userId?: string;
+          email?: string;
+          name?: string;
+        } = JSON.parse(raw);
+
+        if (parsed.userId) {
+          devUserId = parsed.userId;
+        }
+
+        if (parsed.email) {
+          devEmail = parsed.email;
+        }
+
+        if (parsed.name) {
+          devName = parsed.name;
+        }
       } catch {
-        devUserId = token.replace('dev-token-', '') || 'dev-user';
+        res.status(401).json({
+          error: "Invalid development token.",
+          code: "TOKEN_INVALID",
+        });
+        return;
       }
     }
 
@@ -101,13 +163,14 @@ export async function authenticateToken(
       username: devUserId,
       name: devName,
     };
+
     return next();
   }
 
-  // Cognito is not configured and token is not an authorized test token
+  // 4. Reject requests when authentication cannot be verified
   res.status(401).json({
-    error: 'Cognito authentication is not configured on the server. Please configure COGNITO_USER_POOL_ID and COGNITO_CLIENT_ID.',
-    code: 'AUTH_NOT_CONFIGURED',
+    error:
+      "Authentication could not be verified. Check Cognito configuration and log in again.",
+    code: "AUTH_NOT_CONFIGURED",
   });
 }
-

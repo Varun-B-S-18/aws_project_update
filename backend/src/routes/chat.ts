@@ -1,3 +1,5 @@
+import { storeMemory, searchMemories } from "../services/memory/memoryService";
+
 import { Router, Request, Response } from "express";
 import { bedrockService } from "../services/bedrock";
 import {
@@ -32,35 +34,30 @@ export interface MemoryAugmentationResult {
 
 export async function buildMessageWithMemories(
   userId: string,
-  message: string
+  message: string,
 ): Promise<MemoryAugmentationResult> {
   try {
-    let memories = await getMemories(userId);
-
-    // In local development, if a user has no memories yet, fall back to template memories
-    if (memories.length === 0 && (userId.startsWith('dev-') || config.nodeEnv !== 'production')) {
-      const defaultMemories = await getMemories('test-user-1');
-      if (defaultMemories.length > 0) {
-        memories = defaultMemories;
-      }
-    }
+    const memories = await searchMemories(userId, message, 5);
 
     if (memories.length === 0) {
-      return { systemPrompt: undefined, augmentedPrompt: message, memoriesUsed: false, memoryCount: 0 };
+      return {
+        systemPrompt: undefined,
+        augmentedPrompt: message,
+        memoriesUsed: false,
+        memoryCount: 0,
+      };
     }
 
-    // Take up to 15 relevant memories and present in chronological order
-    const selectedMemories = memories
-      .slice(0, 15)
-      .reverse();
-
-    const memoryContext = selectedMemories
+    const memoryContext = memories
       .map((memory) => `- ${memory.content}`)
       .join("\n");
 
-    console.log(`[Memory Debug] Retrieved ${selectedMemories.length} memories for user: ${userId}`);
+    console.log(
+      `[Memory Debug] Retrieved ${memories.length} OpenSearch memories for user: ${userId}`,
+    );
 
     const systemPrompt = `You are a helpful assistant with long-term memory. You remember facts about the user across conversations.
+
 Relevant information remembered about the user:
 ${memoryContext}
 
@@ -70,11 +67,17 @@ Use these saved memories when relevant to answer the user's questions accurately
       systemPrompt,
       augmentedPrompt: message,
       memoriesUsed: true,
-      memoryCount: selectedMemories.length,
+      memoryCount: memories.length,
     };
   } catch (error) {
-    console.error("Failed to retrieve memories:", error);
-    return { systemPrompt: undefined, augmentedPrompt: message, memoriesUsed: false, memoryCount: 0 };
+    console.error("Failed to retrieve memories from OpenSearch:", error);
+
+    return {
+      systemPrompt: undefined,
+      augmentedPrompt: message,
+      memoriesUsed: false,
+      memoryCount: 0,
+    };
   }
 }
 
@@ -296,14 +299,20 @@ chatRouter.post(
         try {
           await saveChatMessage(userId, "user", trimmed);
         } catch (chatErr) {
-          console.error("[ChatRoute] Non-fatal error saving user message to DynamoDB:", chatErr);
+          console.error(
+            "[ChatRoute] Non-fatal error saving user message to DynamoDB:",
+            chatErr,
+          );
         }
 
         // 2. Retrieve saved memories from DynamoDB and build context as system prompt
         const memoryResult = await buildMessageWithMemories(userId, trimmed);
 
         // 3. Generate a reply using Amazon Bedrock with memory context
-        const reply = await bedrockService.generateReply(trimmed, memoryResult.systemPrompt);
+        const reply = await bedrockService.generateReply(
+          trimmed,
+          memoryResult.systemPrompt,
+        );
 
         // 4. Save AI reply to DynamoDB
         try {
@@ -312,16 +321,23 @@ chatRouter.post(
             memoryCount: memoryResult.memoryCount,
           });
         } catch (chatErr) {
-          console.error("[ChatRoute] Non-fatal error saving assistant reply to DynamoDB:", chatErr);
+          console.error(
+            "[ChatRoute] Non-fatal error saving assistant reply to DynamoDB:",
+            chatErr,
+          );
         }
 
         // 5. Intelligently evaluate whether this message contains personal facts/preferences to remember
         const memoryExtract = extractMemoryFromMessage(trimmed);
+
         if (memoryExtract.shouldSave && memoryExtract.content) {
           try {
-            await saveMemory(userId, memoryExtract.content, memoryExtract.category);
+            await storeMemory(userId, memoryExtract.content);
           } catch (memoryError) {
-            console.error("[ChatRoute] Non-fatal error saving extracted memory:", memoryError);
+            console.error(
+              "[ChatRoute] Non-fatal error saving memory to OpenSearch:",
+              memoryError,
+            );
           }
         }
 
@@ -366,7 +382,9 @@ chatRouter.post(
 
       try {
         // Augment with long-term memories from the last user message
-        const lastUserIdx = [...messages].reverse().findIndex((m) => m.role === "user");
+        const lastUserIdx = [...messages]
+          .reverse()
+          .findIndex((m) => m.role === "user");
         let memoryResult: MemoryAugmentationResult = {
           systemPrompt: undefined,
           augmentedPrompt: "",
@@ -384,7 +402,10 @@ chatRouter.post(
           try {
             await saveChatMessage(userId, "user", userContent);
           } catch (chatErr) {
-            console.error("[ChatRoute] Non-fatal error saving user message to DynamoDB:", chatErr);
+            console.error(
+              "[ChatRoute] Non-fatal error saving user message to DynamoDB:",
+              chatErr,
+            );
           }
 
           memoryResult = await buildMessageWithMemories(userId, userContent);
@@ -393,14 +414,24 @@ chatRouter.post(
           const memoryExtract = extractMemoryFromMessage(userContent);
           if (memoryExtract.shouldSave && memoryExtract.content) {
             try {
-              await saveMemory(userId, memoryExtract.content, memoryExtract.category);
+              await saveMemory(
+                userId,
+                memoryExtract.content,
+                memoryExtract.category,
+              );
             } catch (memoryError) {
-              console.error("[ChatRoute] Non-fatal error saving extracted memory:", memoryError);
+              console.error(
+                "[ChatRoute] Non-fatal error saving extracted memory:",
+                memoryError,
+              );
             }
           }
         }
 
-        const reply = await bedrockService.generateReply(formattedMessages, memoryResult.systemPrompt);
+        const reply = await bedrockService.generateReply(
+          formattedMessages,
+          memoryResult.systemPrompt,
+        );
 
         // Save AI reply to DynamoDB
         try {
@@ -409,7 +440,10 @@ chatRouter.post(
             memoryCount: memoryResult.memoryCount,
           });
         } catch (chatErr) {
-          console.error("[ChatRoute] Non-fatal error saving assistant reply to DynamoDB:", chatErr);
+          console.error(
+            "[ChatRoute] Non-fatal error saving assistant reply to DynamoDB:",
+            chatErr,
+          );
         }
 
         return res.status(200).json({
@@ -458,13 +492,16 @@ chatRouter.get(
 
       return res.status(200).json({ messages: formatted });
     } catch (error: unknown) {
-      console.error("[ChatRoute] Failed to load chat history from DynamoDB:", error);
+      console.error(
+        "[ChatRoute] Failed to load chat history from DynamoDB:",
+        error,
+      );
       return res.status(500).json({
         error: "Failed to load chat history from DynamoDB.",
         code: "DYNAMODB_ERROR",
       });
     }
-  }
+  },
 );
 
 /**
@@ -480,11 +517,14 @@ chatRouter.delete(
       const deletedCount = await clearChatHistory(userId);
       return res.status(200).json({ success: true, count: deletedCount });
     } catch (error: unknown) {
-      console.error("[ChatRoute] Failed to clear chat history from DynamoDB:", error);
+      console.error(
+        "[ChatRoute] Failed to clear chat history from DynamoDB:",
+        error,
+      );
       return res.status(500).json({
         error: "Failed to clear chat history from DynamoDB.",
         code: "DYNAMODB_ERROR",
       });
     }
-  }
+  },
 );

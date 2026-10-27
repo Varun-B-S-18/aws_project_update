@@ -150,38 +150,23 @@ export const MemoryDashboard: React.FC = () => {
     }
   };
 
-  const getCategoryBadgeVariant = (cat?: string): 'indigo' | 'emerald' | 'amber' | 'rose' | 'slate' => {
-    switch (cat?.toLowerCase()) {
-      case 'preference':
-        return 'emerald';
-      case 'project':
-        return 'indigo';
-      case 'identity':
-        return 'amber';
-      case 'education':
-        return 'rose';
-      default:
-        return 'slate';
-    }
-  };
-
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-y-auto">
+    <div className="flex-1 flex flex-col h-full bg-[#E8E9DF] text-[#2E3D28] overflow-y-auto">
       {/* Top Header */}
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur px-6 py-4 sticky top-0 z-10">
+      <header className="border-b border-[#2E3D28]/15 bg-[#E8E9DF]/80 backdrop-blur px-6 py-4 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-inner">
+            <div className="w-10 h-10 rounded-xl bg-[#2E3D28]/10 border border-[#2E3D28]/20 flex items-center justify-center text-[#2E3D28]">
               <Database className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-semibold text-slate-100 text-lg">Memory Dashboard</h1>
-                <Badge variant="indigo" size="sm">
+                <h1 className="font-semibold text-[#2E3D28] text-lg">Memory Dashboard</h1>
+                <Badge variant="sage" size="sm">
                   {memories.length} {memories.length === 1 ? 'Fact' : 'Facts'} Stored
                 </Badge>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-[#2E3D28]/70 mt-0.5">
                 Real-time DynamoDB persistence &bull; Retrieved dynamically during chat sessions
               </p>
             </div>
@@ -223,15 +208,15 @@ export const MemoryDashboard: React.FC = () => {
       <div className="max-w-6xl mx-auto w-full p-6 space-y-6">
         {/* Error notification */}
         {error && (
-          <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-3 text-rose-400 text-sm">
+          <div className="p-4 rounded-xl bg-[#2E3D28]/10 border border-[#2E3D28]/30 flex items-start gap-3 text-[#2E3D28] text-sm">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="font-medium">Error accessing DynamoDB</p>
-              <p className="text-xs text-rose-300 mt-0.5">{error}</p>
+              <p className="text-xs text-[#2E3D28]/80 mt-0.5">{error}</p>
             </div>
             <button
               onClick={() => setError(null)}
-              className="text-xs text-rose-400 hover:text-rose-200 underline"
+              className="text-xs text-[#2E3D28] font-medium hover:underline"
             >
               Dismiss
             </button>
@@ -239,24 +224,24 @@ export const MemoryDashboard: React.FC = () => {
         )}
 
         {/* Filter and Search Bar */}
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-900/60 border border-slate-800 p-3.5 rounded-2xl">
+        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-[#E8E9DF] border border-[#2E3D28]/20 p-3.5 rounded-2xl shadow-sm">
           <div className="relative w-full sm:w-80">
             <Input
               placeholder="Search memories..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              icon={<Search className="w-4 h-4" />}
+              icon={<Search className="w-4 h-4 text-[#2E3D28]/60" />}
             />
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-            <Filter className="w-4 h-4 text-slate-500 shrink-0 ml-1" />
+            <Filter className="w-4 h-4 text-[#2E3D28]/60 shrink-0 ml-1" />
             <button
               onClick={() => setSelectedCategory('all')}
               className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors shrink-0 ${
                 selectedCategory === 'all'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                  ? 'bg-[#A9B887] text-[#2E3D28] font-semibold shadow-sm'
+                  : 'bg-[#2E3D28]/10 text-[#2E3D28]/70 hover:bg-[#2E3D28]/20'
               }`}
             >
               All Categories
@@ -267,8 +252,8 @@ export const MemoryDashboard: React.FC = () => {
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-medium capitalize transition-colors shrink-0 ${
                   selectedCategory.toLowerCase() === cat.toLowerCase()
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                    ? 'bg-[#A9B887] text-[#2E3D28] font-semibold shadow-sm'
+                    : 'bg-[#2E3D28]/10 text-[#2E3D28]/70 hover:bg-[#2E3D28]/20'
                 }`}
               >
                 {cat}
@@ -279,19 +264,19 @@ export const MemoryDashboard: React.FC = () => {
 
         {/* Memory Items Grid */}
         {isLoading && memories.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
+          <div className="flex flex-col items-center justify-center py-20 text-[#2E3D28]/60">
+            <div className="w-8 h-8 border-2 border-[#2E3D28] border-t-transparent rounded-full animate-spin mb-3" />
             <p className="text-sm">Retrieving memories from Amazon DynamoDB...</p>
           </div>
         ) : filteredMemories.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 px-4 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
-            <div className="w-12 h-12 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-center text-slate-400 mb-3">
+          <div className="flex flex-col items-center justify-center py-20 px-4 text-center border border-dashed border-[#2E3D28]/25 rounded-2xl bg-[#E8E9DF]">
+            <div className="w-12 h-12 rounded-2xl bg-[#2E3D28]/10 border border-[#2E3D28]/20 flex items-center justify-center text-[#2E3D28] mb-3">
               <Layers className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-medium text-slate-200">
+            <h3 className="text-base font-medium text-[#2E3D28]">
               {searchQuery || selectedCategory !== 'all' ? 'No matching memories found' : 'No memories saved yet'}
             </h3>
-            <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
+            <p className="text-xs text-[#2E3D28]/70 max-w-sm mt-1 mb-4">
               {searchQuery || selectedCategory !== 'all'
                 ? 'Try broadening your search or resetting category filters.'
                 : 'Chat with the assistant to have facts automatically extracted, or add one manually above.'}
@@ -312,17 +297,17 @@ export const MemoryDashboard: React.FC = () => {
             {filteredMemories.map((mem) => (
               <div
                 key={mem.recordId}
-                className="group p-4 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-slate-750 transition-all flex flex-col justify-between"
+                className="group p-4 rounded-2xl bg-[#E8E9DF] border border-[#2E3D28]/20 hover:border-[#A9B887] transition-all flex flex-col justify-between shadow-sm"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-2.5">
-                    <Badge variant={getCategoryBadgeVariant(mem.category)} size="sm">
+                    <Badge variant="sage" size="sm">
                       {mem.category || 'General'}
                     </Badge>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => handleOpenEditModal(mem)}
-                        className="p-1 text-slate-400 hover:text-indigo-400 rounded-md hover:bg-slate-800 transition-colors"
+                        className="p-1 text-[#2E3D28]/60 hover:text-[#2E3D28] rounded-md hover:bg-[#2E3D28]/10 transition-colors"
                         title="Edit Memory"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -332,7 +317,7 @@ export const MemoryDashboard: React.FC = () => {
                           setMemoryToDelete(mem);
                           setDeleteModalOpen(true);
                         }}
-                        className="p-1 text-slate-400 hover:text-rose-400 rounded-md hover:bg-slate-800 transition-colors"
+                        className="p-1 text-[#2E3D28]/60 hover:text-rose-600 rounded-md hover:bg-[#2E3D28]/10 transition-colors"
                         title="Delete Memory"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -340,12 +325,12 @@ export const MemoryDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <p className="text-sm text-slate-200 leading-relaxed font-normal whitespace-pre-wrap">
+                  <p className="text-sm text-[#2E3D28] leading-relaxed font-normal whitespace-pre-wrap">
                     {mem.content}
                   </p>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-500">
+                <div className="mt-4 pt-3 border-t border-[#2E3D28]/10 flex items-center justify-between text-[11px] text-[#2E3D28]/60">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {new Date(mem.createdAt).toLocaleDateString(undefined, {
@@ -354,7 +339,7 @@ export const MemoryDashboard: React.FC = () => {
                       year: 'numeric',
                     })}
                   </span>
-                  <span className="font-mono text-[10px] text-slate-600">
+                  <span className="font-mono text-[10px] text-[#2E3D28]/50">
                     ID: {mem.recordId.substring(0, 8)}...
                   </span>
                 </div>
@@ -373,11 +358,11 @@ export const MemoryDashboard: React.FC = () => {
       >
         <form onSubmit={handleSaveMemory} className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-slate-300 block mb-1.5">
+            <label className="text-xs font-medium text-[#2E3D28] block mb-1.5">
               Memory Content
             </label>
             <textarea
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500/80 focus:ring-1 focus:ring-indigo-500/30 transition-all resize-none min-h-[100px]"
+              className="w-full bg-[#E8E9DF] border border-[#2E3D28]/25 rounded-xl p-3 text-sm text-[#2E3D28] placeholder-[#2E3D28]/40 focus:outline-none focus:border-[#2E3D28] focus:ring-1 focus:ring-[#A9B887] transition-all resize-none min-h-[100px]"
               placeholder="e.g. My favorite programming language is TypeScript."
               value={memoryContent}
               onChange={(e) => setMemoryContent(e.target.value)}
@@ -387,9 +372,9 @@ export const MemoryDashboard: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-slate-300 block mb-1.5">Category</label>
+            <label className="text-xs font-medium text-[#2E3D28] block mb-1.5">Category</label>
             <select
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/80 focus:ring-1 focus:ring-indigo-500/30"
+              className="w-full bg-[#E8E9DF] border border-[#2E3D28]/25 rounded-xl px-3 py-2 text-sm text-[#2E3D28] focus:outline-none focus:border-[#2E3D28] focus:ring-1 focus:ring-[#A9B887]"
               value={memoryCategory}
               onChange={(e) => setMemoryCategory(e.target.value)}
             >
@@ -451,7 +436,7 @@ export const MemoryDashboard: React.FC = () => {
           </>
         }
       >
-        <p className="text-sm text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800 italic">
+        <p className="text-sm text-[#2E3D28] bg-[#2E3D28]/10 p-3 rounded-xl border border-[#2E3D28]/20 italic">
           &ldquo;{memoryToDelete?.content}&rdquo;
         </p>
       </Modal>
@@ -483,11 +468,10 @@ export const MemoryDashboard: React.FC = () => {
           </>
         }
       >
-        <p className="text-sm text-slate-300">
+        <p className="text-sm text-[#2E3D28]">
           This action cannot be undone. Bedrock will no longer recall any previously saved facts during subsequent conversations.
         </p>
       </Modal>
     </div>
   );
 };
-

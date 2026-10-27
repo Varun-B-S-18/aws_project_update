@@ -62,7 +62,62 @@ export async function authenticateToken(
     return;
   }
 
-  // 2. Verify Cognito access tokens when Cognito is configured
+  // 2. Allow test and development tokens in non-production environments
+  const isNonProduction =
+    config.nodeEnv === "development" || config.nodeEnv === "test";
+  const isDevelopmentToken =
+    token.startsWith("test-token-") || token.startsWith("dev-token-");
+
+  if (isNonProduction && isDevelopmentToken) {
+    let devUserId = "test-user-1";
+    let devEmail = "test@example.com";
+    let devName = "Test User";
+
+    // Handle test-token-<userId>
+    if (token.startsWith("test-token-")) {
+      const suffix = token.substring("test-token-".length);
+      if (suffix) {
+        devUserId = suffix;
+        devEmail = `${suffix}@example.com`;
+        devName = suffix;
+      }
+    }
+    // Handle dev-token-<base64-encoded-user-payload>
+    else if (token.startsWith("dev-token-")) {
+      try {
+        const encodedPayload = token.substring("dev-token-".length);
+        const raw = Buffer.from(encodedPayload, "base64").toString("utf-8");
+        const parsed: {
+          userId?: string;
+          email?: string;
+          name?: string;
+        } = JSON.parse(raw);
+
+        if (parsed.userId) {
+          devUserId = parsed.userId;
+        }
+        if (parsed.email) {
+          devEmail = parsed.email;
+        }
+        if (parsed.name) {
+          devName = parsed.name;
+        }
+      } catch {
+        devUserId = token.substring("dev-token-".length) || "dev-user";
+      }
+    }
+
+    req.user = {
+      userId: devUserId,
+      email: devEmail,
+      username: devUserId,
+      name: devName,
+    };
+
+    return next();
+  }
+
+  // 3. Verify Cognito access tokens when Cognito is configured
   const verifier = getCognitoVerifier();
 
   if (verifier) {
@@ -96,77 +151,6 @@ export async function authenticateToken(
       return;
     }
   }
-
-  // 3. Allow development tokens only when Cognito is not configured
-  //    and the server is running in development or test mode.
-  const isNonProduction =
-    config.nodeEnv === "development" || config.nodeEnv === "test";
-
-  const isDevelopmentToken =
-    token.startsWith("test-token-") || token.startsWith("dev-token-");
-
-  const cognitoIsNotConfigured =
-    !config.cognitoUserPoolId || !config.cognitoClientId;
-
-  if (isNonProduction && isDevelopmentToken && cognitoIsNotConfigured) {
-    let devUserId = "test-user-1";
-    let devEmail = "test@example.com";
-    let devName = "Test User";
-
-    // Handle test-token-<userId>
-    if (token.startsWith("test-token-")) {
-      const suffix = token.substring("test-token-".length);
-
-      if (suffix) {
-        devUserId = suffix;
-        devEmail = `${suffix}@example.com`;
-        devName = suffix;
-      }
-    }
-
-    // Handle dev-token-<base64-encoded-user-payload>
-    else if (token.startsWith("dev-token-")) {
-      try {
-        const encodedPayload = token.substring("dev-token-".length);
-
-        const raw = Buffer.from(encodedPayload, "base64").toString("utf-8");
-
-        const parsed: {
-          userId?: string;
-          email?: string;
-          name?: string;
-        } = JSON.parse(raw);
-
-        if (parsed.userId) {
-          devUserId = parsed.userId;
-        }
-
-        if (parsed.email) {
-          devEmail = parsed.email;
-        }
-
-        if (parsed.name) {
-          devName = parsed.name;
-        }
-      } catch {
-        res.status(401).json({
-          error: "Invalid development token.",
-          code: "TOKEN_INVALID",
-        });
-        return;
-      }
-    }
-
-    req.user = {
-      userId: devUserId,
-      email: devEmail,
-      username: devUserId,
-      name: devName,
-    };
-
-    return next();
-  }
-
   // 4. Reject requests when authentication cannot be verified
   res.status(401).json({
     error:

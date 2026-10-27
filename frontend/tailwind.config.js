@@ -7,6 +7,11 @@ export default {
   theme: {
     extend: {
       colors: {
+        theme: {
+          softWhite: '#E8E9DF',
+          sage: '#A9B887',
+          deepGreen: '#2E3D28',
+        },
         slate: {
           850: '#151f32',
           900: '#0f172a',

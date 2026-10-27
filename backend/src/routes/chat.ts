@@ -16,7 +16,15 @@ import {
   saveChatMessage,
   getChatHistory,
   clearChatHistory,
+  createConversation,
+  getConversations,
+  getConversationById,
+  updateConversationTitle,
+  saveConversationMessage,
+  getConversationMessages,
+  deleteConversation,
 } from "../services/dynamodb";
+import { randomUUID } from "crypto";
 import { extractMemoryFromMessage } from "../services/memoryExtraction";
 import { authenticateToken } from "../middleware/auth";
 import { config } from "../config";
@@ -61,7 +69,8 @@ export async function buildMessageWithMemories(
 Relevant information remembered about the user:
 ${memoryContext}
 
-Use these saved memories when relevant to answer the user's questions accurately. Do not invent contradictory personal information.`;
+Use these saved memories when relevant to answer the user's questions accurately. Do not invent contradictory personal information.
+`;
 
     return {
       systemPrompt,
@@ -270,7 +279,8 @@ chatRouter.post(
     // Authenticated user ID derived strictly from verified token (sub claim)
     const userId = req.user!.userId;
 
-    const { message, messages } = req.body;
+    const { message, messages, conversationId } = req.body;
+    const activeConvId = conversationId || (req.headers["x-conversation-id"] as string) || `conv-${randomUUID()}`;
 
     // Validate presence of at least one input format
     if (!message && (!messages || !Array.isArray(messages))) {
@@ -298,6 +308,7 @@ chatRouter.post(
         // 1. Save incoming user message to DynamoDB
         try {
           await saveChatMessage(userId, "user", trimmed);
+          await saveConversationMessage(userId, activeConvId, "user", trimmed);
         } catch (chatErr) {
           console.error(
             "[ChatRoute] Non-fatal error saving user message to DynamoDB:",
@@ -320,6 +331,10 @@ chatRouter.post(
             memoriesUsed: memoryResult.memoriesUsed,
             memoryCount: memoryResult.memoryCount,
           });
+          await saveConversationMessage(userId, activeConvId, "assistant", reply, {
+            memoriesUsed: memoryResult.memoriesUsed,
+            memoryCount: memoryResult.memoryCount,
+          });
         } catch (chatErr) {
           console.error(
             "[ChatRoute] Non-fatal error saving assistant reply to DynamoDB:",
@@ -331,6 +346,18 @@ chatRouter.post(
         const memoryExtract = extractMemoryFromMessage(trimmed);
 
         if (memoryExtract.shouldSave && memoryExtract.content) {
+          try {
+            await saveMemory(
+              userId,
+              memoryExtract.content,
+              memoryExtract.category,
+            );
+          } catch (memoryError) {
+            console.error(
+              "[ChatRoute] Non-fatal error saving memory to DynamoDB:",
+              memoryError,
+            );
+          }
           try {
             await storeMemory(userId, memoryExtract.content);
           } catch (memoryError) {
@@ -344,6 +371,7 @@ chatRouter.post(
         return res.status(200).json({
           reply,
           message: reply,
+          conversationId: activeConvId,
           memoriesUsed: memoryResult.memoriesUsed,
           memoryCount: memoryResult.memoryCount,
         });
@@ -401,6 +429,7 @@ chatRouter.post(
           // Save incoming user message to DynamoDB
           try {
             await saveChatMessage(userId, "user", userContent);
+            await saveConversationMessage(userId, activeConvId, "user", userContent);
           } catch (chatErr) {
             console.error(
               "[ChatRoute] Non-fatal error saving user message to DynamoDB:",
@@ -421,7 +450,15 @@ chatRouter.post(
               );
             } catch (memoryError) {
               console.error(
-                "[ChatRoute] Non-fatal error saving extracted memory:",
+                "[ChatRoute] Non-fatal error saving extracted memory to DynamoDB:",
+                memoryError,
+              );
+            }
+            try {
+              await storeMemory(userId, memoryExtract.content);
+            } catch (memoryError) {
+              console.error(
+                "[ChatRoute] Non-fatal error saving extracted memory to OpenSearch:",
                 memoryError,
               );
             }
@@ -439,6 +476,10 @@ chatRouter.post(
             memoriesUsed: memoryResult.memoriesUsed,
             memoryCount: memoryResult.memoryCount,
           });
+          await saveConversationMessage(userId, activeConvId, "assistant", reply, {
+            memoriesUsed: memoryResult.memoriesUsed,
+            memoryCount: memoryResult.memoryCount,
+          });
         } catch (chatErr) {
           console.error(
             "[ChatRoute] Non-fatal error saving assistant reply to DynamoDB:",
@@ -449,6 +490,7 @@ chatRouter.post(
         return res.status(200).json({
           reply,
           message: reply, // Backward-compatibility alias
+          conversationId: activeConvId,
           memoriesUsed: memoryResult.memoriesUsed,
           memoryCount: memoryResult.memoryCount,
         });
@@ -470,6 +512,7 @@ chatRouter.post(
 /**
  * GET /api/chat/history
  * Retrieves full conversation history saved in DynamoDB for the authenticated user.
+ * Optional query: ?conversationId=<id>
  */
 chatRouter.get(
   "/chat/history",
@@ -477,18 +520,36 @@ chatRouter.get(
   async (req: Request, res: Response) => {
     try {
       const userId = req.user!.userId;
-      const history = await getChatHistory(userId);
-      const formatted = history.map((m) => ({
-        id: m.recordId,
-        role: m.role,
-        content: m.content,
-        timestamp: new Date(m.createdAt).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        memoriesUsed: m.memoriesUsed,
-        memoryCount: m.memoryCount,
-      }));
+      const conversationId = req.query.conversationId as string | undefined;
+
+      let formatted;
+      if (conversationId) {
+        const history = await getConversationMessages(userId, conversationId);
+        formatted = history.map((m) => ({
+          id: m.recordId,
+          role: m.role,
+          content: m.content,
+          timestamp: new Date(m.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          memoriesUsed: m.memoriesUsed,
+          memoryCount: m.memoryCount,
+        }));
+      } else {
+        const history = await getChatHistory(userId);
+        formatted = history.map((m) => ({
+          id: m.recordId,
+          role: m.role,
+          content: m.content,
+          timestamp: new Date(m.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          memoriesUsed: m.memoriesUsed,
+          memoryCount: m.memoryCount,
+        }));
+      }
 
       return res.status(200).json({ messages: formatted });
     } catch (error: unknown) {
@@ -523,6 +584,154 @@ chatRouter.delete(
       );
       return res.status(500).json({
         error: "Failed to clear chat history from DynamoDB.",
+        code: "DYNAMODB_ERROR",
+      });
+    }
+  },
+);
+
+/**
+ * GET /api/conversations
+ * Lists all conversations belonging to the authenticated user.
+ */
+chatRouter.get(
+  "/conversations",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const conversations = await getConversations(userId);
+      return res.status(200).json({ conversations });
+    } catch (error: unknown) {
+      console.error("[ChatRoute] Failed to list conversations:", error);
+      return res.status(500).json({
+        error: "Failed to list conversations.",
+        code: "DYNAMODB_ERROR",
+      });
+    }
+  },
+);
+
+/**
+ * POST /api/conversations
+ * Creates a new conversation for the authenticated user.
+ */
+chatRouter.post(
+  "/conversations",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const { title, conversationId } = req.body || {};
+      const conversation = await createConversation(userId, title, conversationId);
+      return res.status(201).json({ conversation });
+    } catch (error: unknown) {
+      console.error("[ChatRoute] Failed to create conversation:", error);
+      return res.status(500).json({
+        error: "Failed to create conversation.",
+        code: "DYNAMODB_ERROR",
+      });
+    }
+  },
+);
+
+/**
+ * GET /api/conversations/:conversationId
+ * Retrieves a specific conversation and all its messages.
+ */
+chatRouter.get(
+  "/conversations/:conversationId",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const { conversationId } = req.params;
+
+      const conversation = await getConversationById(userId, conversationId);
+      const rawMessages = await getConversationMessages(userId, conversationId);
+
+      const messages = rawMessages.map((m) => ({
+        id: m.recordId,
+        role: m.role,
+        content: m.content,
+        timestamp: new Date(m.createdAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        memoriesUsed: m.memoriesUsed,
+        memoryCount: m.memoryCount,
+      }));
+
+      return res.status(200).json({
+        conversation: conversation || {
+          conversationId,
+          title: "New Chat",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        messages,
+      });
+    } catch (error: unknown) {
+      console.error("[ChatRoute] Failed to get conversation:", error);
+      return res.status(500).json({
+        error: "Failed to retrieve conversation.",
+        code: "DYNAMODB_ERROR",
+      });
+    }
+  },
+);
+
+/**
+ * PATCH /api/conversations/:conversationId
+ * Renames a conversation.
+ */
+chatRouter.patch(
+  "/conversations/:conversationId",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const { conversationId } = req.params;
+      const { title } = req.body;
+
+      if (!title || typeof title !== "string" || !title.trim()) {
+        return res.status(400).json({ error: "Title is required." });
+      }
+
+      const updated = await updateConversationTitle(userId, conversationId, title.trim(), true);
+      if (!updated) {
+        return res.status(404).json({ error: "Conversation not found." });
+      }
+
+      return res.status(200).json({ conversation: updated });
+    } catch (error: unknown) {
+      console.error("[ChatRoute] Failed to rename conversation:", error);
+      return res.status(500).json({
+        error: "Failed to rename conversation.",
+        code: "DYNAMODB_ERROR",
+      });
+    }
+  },
+);
+
+/**
+ * DELETE /api/conversations/:conversationId
+ * Deletes a conversation and all its messages without deleting long-term memories.
+ */
+chatRouter.delete(
+  "/conversations/:conversationId",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const { conversationId } = req.params;
+
+      await deleteConversation(userId, conversationId);
+      return res.status(200).json({ success: true, conversationId });
+    } catch (error: unknown) {
+      console.error("[ChatRoute] Failed to delete conversation:", error);
+      return res.status(500).json({
+        error: "Failed to delete conversation.",
         code: "DYNAMODB_ERROR",
       });
     }

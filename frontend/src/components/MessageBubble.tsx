@@ -17,10 +17,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     >
       {/* Avatar Icon */}
       <div
-        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-medium border ${
+        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-semibold border ${
           isUser
-            ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
-            : 'bg-slate-800 text-indigo-400 border-slate-700 shadow-sm'
+            ? 'bg-[#A9B887] text-[#2E3D28] border-[#2E3D28]/20 shadow-xs'
+            : 'bg-[#2E3D28] text-[#E8E9DF] border-[#2E3D28] shadow-xs'
         }`}
         aria-label={isUser ? 'User Avatar' : 'Assistant Avatar'}
       >
@@ -36,8 +36,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         <div
           className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
             isUser
-              ? 'bg-indigo-600 text-white rounded-tr-sm shadow-sm'
-              : 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-sm shadow-sm'
+              ? 'bg-[#A9B887] text-[#2E3D28] font-medium rounded-tr-sm shadow-xs border border-[#2E3D28]/15'
+              : 'bg-[#E8E9DF] border border-[#2E3D28]/20 text-[#2E3D28] rounded-tl-sm shadow-xs'
           }`}
         >
           {message.content}
@@ -45,12 +45,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
         {/* Footer with Timestamp and Memory Indicator */}
         <div className="flex items-center gap-2 mt-1 px-1 select-none">
-          <span className="text-[11px] text-slate-500">
+          <span className="text-[11px] text-[#2E3D28]/60 font-medium">
             {message.timestamp}
           </span>
           {!isUser && message.memoriesUsed && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-indigo-400 bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-900/50">
-              <Brain className="w-3 h-3 text-indigo-400" />
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#2E3D28] bg-[#A9B887]/25 px-1.5 py-0.5 rounded-md border border-[#A9B887]/50">
+              <Brain className="w-3 h-3 text-[#2E3D28]" />
               <span>Memory applied ({message.memoryCount || 1})</span>
             </span>
           )}

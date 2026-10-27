@@ -5,6 +5,7 @@ import {
   BedrockHealthResponse,
   MessageRole,
   Message,
+  Conversation,
 } from '../types/chat';
 import { Memory } from '../types/memory';
 
@@ -58,22 +59,62 @@ export const api = {
    */
   async sendChatMessage(
     message: string,
-    history?: Array<{ role: MessageRole; content: string }>
+    history?: Array<{ role: MessageRole; content: string }>,
+    conversationId?: string
   ): Promise<ChatApiResponse> {
     return requestApi<ChatApiResponse>('/api/chat', {
       method: 'POST',
       body: JSON.stringify({
         message,
         messages: history && history.length > 0 ? history : undefined,
+        conversationId,
       }),
     });
   },
 
   /**
+   * Conversation Management APIs
+   */
+  async getConversations(): Promise<Conversation[]> {
+    const data = await requestApi<{ conversations: Conversation[] }>('/api/conversations');
+    return data.conversations || [];
+  },
+
+  async createConversation(title?: string, conversationId?: string): Promise<Conversation> {
+    const data = await requestApi<{ conversation: Conversation }>('/api/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ title, conversationId }),
+    });
+    return data.conversation;
+  },
+
+  async getConversation(conversationId: string): Promise<{ conversation: Conversation; messages: Message[] }> {
+    return requestApi<{ conversation: Conversation; messages: Message[] }>(`/api/conversations/${conversationId}`);
+  },
+
+  async renameConversation(conversationId: string, title: string): Promise<Conversation> {
+    const data = await requestApi<{ conversation: Conversation }>(`/api/conversations/${conversationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    });
+    return data.conversation;
+  },
+
+  async deleteConversation(conversationId: string): Promise<boolean> {
+    const data = await requestApi<{ success: boolean }>(`/api/conversations/${conversationId}`, {
+      method: 'DELETE',
+    });
+    return data.success;
+  },
+
+  /**
    * Conversation History APIs (Amazon DynamoDB persistence)
    */
-  async getChatHistory(): Promise<Message[]> {
-    const data = await requestApi<{ messages: Message[] }>('/api/chat/history');
+  async getChatHistory(conversationId?: string): Promise<Message[]> {
+    const url = conversationId
+      ? `/api/chat/history?conversationId=${encodeURIComponent(conversationId)}`
+      : '/api/chat/history';
+    const data = await requestApi<{ messages: Message[] }>(url);
     return data.messages || [];
   },
 

@@ -8,11 +8,13 @@ export interface ChatMessage {
 export interface ChatRequest {
   message?: string;
   messages?: ChatMessage[];
+  conversationId?: string;
 }
 
 export interface ChatResponse {
   reply: string;
   message?: string;
+  conversationId?: string;
   memoriesUsed?: boolean;
   memoryCount?: number;
 }

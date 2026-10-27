@@ -16,7 +16,7 @@ export const ChatPage: React.FC = () => {
   } = useChat();
 
   return (
-    <div className="flex flex-col h-full w-full bg-slate-950 text-slate-100 overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-[#E8E9DF] text-[#2E3D28] overflow-hidden">
       {/* Top Header */}
       <Header
         onClearChat={clearChat}

@@ -39,33 +39,33 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 py-12">
+    <div className="min-h-screen bg-[#E8E9DF] text-[#2E3D28] flex flex-col justify-center items-center px-4 py-12">
       <div className="w-full max-w-md">
         {/* Brand Header */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2.5 mb-4 group">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-inner group-hover:scale-105 transition-transform">
+            <div className="w-10 h-10 rounded-xl bg-[#2E3D28]/10 border border-[#2E3D28]/20 flex items-center justify-center text-[#2E3D28] shadow-inner group-hover:scale-105 transition-transform">
               <Bot className="w-5 h-5" />
             </div>
-            <span className="font-semibold text-slate-100 text-xl tracking-tight">
-              Memory Assistant
+            <span className="font-semibold text-[#2E3D28] text-xl tracking-tight">
+              Memory AI
             </span>
           </Link>
-          <h2 className="text-2xl font-bold text-slate-100">Welcome back</h2>
-          <p className="text-sm text-slate-400 mt-1">
+          <h2 className="text-2xl font-bold text-[#2E3D28]">Welcome back</h2>
+          <p className="text-sm text-[#2E3D28]/70 mt-1">
             Sign in to access your persistent memory chat
           </p>
           <div className="mt-3 flex justify-center">
-            <Badge variant={isCognitoLive ? 'emerald' : 'amber'} size="sm" dot>
+            <Badge variant={isCognitoLive ? 'sage' : 'amber'} size="sm" dot>
               {isCognitoLive ? 'Amazon Cognito Active' : 'Dev Mode Active'}
             </Badge>
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
+        <div className="bg-[#E8E9DF] border border-[#2E3D28]/20 rounded-2xl p-6 sm:p-8 shadow-md">
           {error && (
-            <div className="mb-6 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-3 text-rose-400 text-xs leading-relaxed">
+            <div className="mb-6 p-3.5 rounded-xl bg-[#2E3D28]/10 border border-[#2E3D28]/30 flex items-start gap-3 text-[#2E3D28] text-xs leading-relaxed">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -85,10 +85,10 @@ export const LoginPage: React.FC = () => {
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium text-slate-300">Password</label>
+                <label className="text-xs font-medium text-[#2E3D28]">Password</label>
                 <Link
                   to="/forgot-password"
-                  className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  className="text-xs text-[#2E3D28] font-medium hover:underline transition-colors"
                 >
                   Forgot password?
                 </Link>
@@ -118,8 +118,8 @@ export const LoginPage: React.FC = () => {
 
           {/* Quick Dev Mode Autofill Helper */}
           {!isCognitoLive && (
-            <div className="mt-6 pt-5 border-t border-slate-800/80">
-              <p className="text-xs text-slate-400 mb-2">Dev Quick Login:</p>
+            <div className="mt-6 pt-5 border-t border-[#2E3D28]/15">
+              <p className="text-xs text-[#2E3D28]/70 mb-2">Dev Quick Login:</p>
               <div className="flex gap-2">
                 <Button
                   type="button"
@@ -139,9 +139,9 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* Footer link */}
-        <p className="text-center text-sm text-slate-400 mt-6">
+        <p className="text-center text-sm text-[#2E3D28]/70 mt-6">
           Don&apos;t have an account?{' '}
-          <Link to="/signup" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+          <Link to="/signup" className="text-[#2E3D28] font-semibold hover:underline transition-colors">
             Sign up
           </Link>
         </p>
@@ -149,4 +149,3 @@ export const LoginPage: React.FC = () => {
     </div>
   );
 };
-

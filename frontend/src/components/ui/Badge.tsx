@@ -2,7 +2,7 @@ import React from 'react';
 
 export interface BadgeProps {
   children: React.ReactNode;
-  variant?: 'default' | 'indigo' | 'emerald' | 'amber' | 'rose' | 'slate';
+  variant?: 'default' | 'sage' | 'deepGreen' | 'indigo' | 'emerald' | 'amber' | 'rose' | 'slate';
   size?: 'sm' | 'md';
   className?: string;
   dot?: boolean;
@@ -16,26 +16,30 @@ export const Badge: React.FC<BadgeProps> = ({
   dot = false,
 }) => {
   const sizeStyles = {
-    sm: 'text-[10px] px-1.5 py-0.5',
+    sm: 'text-[10px] px-2 py-0.5',
     md: 'text-xs px-2.5 py-0.5',
   };
 
   const variantStyles = {
-    default: 'bg-indigo-950/80 text-indigo-300 border-indigo-800/80',
-    indigo: 'bg-indigo-950/80 text-indigo-300 border-indigo-800/80',
-    emerald: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80',
-    amber: 'bg-amber-950/80 text-amber-300 border-amber-800/80',
-    rose: 'bg-rose-950/80 text-rose-300 border-rose-800/80',
-    slate: 'bg-slate-800/80 text-slate-300 border-slate-700/80',
+    default: 'bg-[#A9B887]/25 text-[#2E3D28] border-[#A9B887]/50',
+    sage: 'bg-[#A9B887]/30 text-[#2E3D28] border-[#A9B887]/60 font-medium',
+    deepGreen: 'bg-[#2E3D28] text-[#E8E9DF] border-[#2E3D28] font-medium',
+    indigo: 'bg-[#A9B887]/20 text-[#2E3D28] border-[#A9B887]/40',
+    emerald: 'bg-[#A9B887]/30 text-[#2E3D28] border-[#A9B887]/60 font-medium',
+    amber: 'bg-[#c2aa70]/25 text-[#2E3D28] border-[#c2aa70]/40',
+    rose: 'bg-rose-100 text-rose-900 border-rose-300',
+    slate: 'bg-[#2E3D28]/10 text-[#2E3D28] border-[#2E3D28]/20',
   };
 
   const dotColors = {
-    default: 'bg-indigo-400',
-    indigo: 'bg-indigo-400',
-    emerald: 'bg-emerald-400',
-    amber: 'bg-amber-400',
-    rose: 'bg-rose-400',
-    slate: 'bg-slate-400',
+    default: 'bg-[#2E3D28]',
+    sage: 'bg-[#2E3D28]',
+    deepGreen: 'bg-[#A9B887]',
+    indigo: 'bg-[#2E3D28]',
+    emerald: 'bg-[#2E3D28]',
+    amber: 'bg-[#c2aa70]',
+    rose: 'bg-rose-600',
+    slate: 'bg-[#2E3D28]/60',
   };
 
   return (
@@ -47,4 +51,3 @@ export const Badge: React.FC<BadgeProps> = ({
     </span>
   );
 };
-

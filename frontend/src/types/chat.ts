@@ -9,17 +9,26 @@ export interface Message {
   memoryCount?: number;
 }
 
+export interface Conversation {
+  conversationId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ChatApiRequest {
   message?: string;
   messages?: Array<{
     role: MessageRole;
     content: string;
   }>;
+  conversationId?: string;
 }
 
 export interface ChatApiResponse {
   reply?: string;
   message?: string;
+  conversationId?: string;
   memoriesUsed?: boolean;
   memoryCount?: number;
 }

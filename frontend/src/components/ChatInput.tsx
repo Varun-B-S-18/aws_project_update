@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Send, ArrowUp } from 'lucide-react';
+import { Send } from 'lucide-react';
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
@@ -46,14 +46,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const isSendDisabled = !input.trim() || isLoading || disabled;
 
   return (
-    <div className="border-t border-slate-800 bg-slate-900/90 backdrop-blur p-4">
+    <div className="border-t border-[#2E3D28]/15 bg-[#E8E9DF] p-4">
       <div className="max-w-4xl mx-auto">
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleSend();
           }}
-          className="relative flex items-end gap-2 bg-slate-950 border border-slate-800 rounded-2xl p-2 focus-within:border-indigo-500/80 focus-within:ring-1 focus-within:ring-indigo-500/30 transition-all shadow-inner"
+          className="relative flex items-end gap-2 bg-[#E8E9DF] border border-[#2E3D28]/25 rounded-2xl p-2 focus-within:border-[#A9B887] focus-within:ring-2 focus-within:ring-[#A9B887]/30 transition-all shadow-sm"
         >
           <textarea
             ref={textareaRef}
@@ -63,41 +63,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             onKeyDown={handleKeyDown}
             placeholder={
               isLoading
-                ? 'Waiting for AI response...'
+                ? 'Thinking...'
                 : 'Type your message... (Shift + Enter for newline)'
             }
             disabled={isLoading || disabled}
-            className="w-full resize-none bg-transparent px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-44 leading-relaxed"
+            className="w-full resize-none bg-transparent px-3 py-2 text-sm text-[#2E3D28] placeholder-[#2E3D28]/50 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-44 leading-relaxed font-sans"
           />
 
           <button
             type="submit"
             disabled={isSendDisabled}
-            className={`p-2.5 rounded-xl font-medium text-xs flex items-center justify-center transition-all shrink-0 ${
+            className={`p-2.5 rounded-xl font-semibold text-xs flex items-center justify-center transition-all shrink-0 ${
               isSendDisabled
-                ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'
-                : 'bg-indigo-600 text-white hover:bg-indigo-500 active:scale-95 shadow-md shadow-indigo-600/20'
+                ? 'bg-[#2E3D28]/10 text-[#2E3D28]/35 cursor-not-allowed'
+                : 'bg-[#A9B887] text-[#2E3D28] hover:bg-[#9bb074] active:scale-95 shadow-sm border border-[#2E3D28]/20'
             }`}
-            title="Send message"
             aria-label="Send message"
           >
-            {isLoading ? (
-              <span className="w-4 h-4 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
-            ) : (
-              <>
-                <Send className="w-4 h-4 hidden sm:block" />
-                <ArrowUp className="w-4 h-4 sm:hidden" />
-              </>
-            )}
+            <Send className="w-4 h-4 stroke-[2.2]" />
           </button>
         </form>
 
-        <div className="flex justify-between items-center mt-2 px-1 text-[11px] text-slate-500">
-          <span>Press Enter to send, Shift + Enter for newline</span>
-          <span className="text-emerald-500/80">Persistent memory active (Amazon DynamoDB)</span>
-        </div>
+        <p className="text-[11px] text-center text-[#2E3D28]/50 mt-2 font-medium">
+          Long-Term Memory Assistant &bull; Relevant facts automatically remembered across conversations
+        </p>
       </div>
     </div>
   );
 };
-

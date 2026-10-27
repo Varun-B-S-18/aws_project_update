@@ -1,7 +1,13 @@
 import request from 'supertest';
-import { app } from '../src/app';
 import { bedrockService } from '../src/services/bedrock';
 import * as dynamodbService from '../src/services/dynamodb';
+import { storeMemory, searchMemories } from '../src/services/memory/memoryService';
+
+// Mock OpenSearch memory service before importing app
+jest.mock('../src/services/memory/memoryService', () => ({
+  storeMemory: jest.fn(),
+  searchMemories: jest.fn(),
+}));
 
 // Mock the BedrockService so tests do not make external AWS calls or incur charges
 jest.mock('../src/services/bedrock', () => ({
@@ -41,13 +47,45 @@ jest.mock('../src/services/dynamodb', () => ({
   ),
   getChatHistory: jest.fn().mockResolvedValue([]),
   clearChatHistory: jest.fn().mockResolvedValue(0),
+  createConversation: jest.fn().mockImplementation((userId, title, id) =>
+    Promise.resolve({
+      userId,
+      recordId: `conv-${id || '1'}`,
+      conversationId: id || '1',
+      title: title || 'New Chat',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      category: 'conversation',
+    })
+  ),
+  getConversations: jest.fn().mockResolvedValue([]),
+  getConversationById: jest.fn().mockResolvedValue(null),
+  updateConversationTitle: jest.fn().mockResolvedValue({ conversationId: '1', title: 'Updated' }),
+  saveConversationMessage: jest.fn().mockImplementation((userId, convId, role, content, extra) =>
+    Promise.resolve({
+      userId,
+      recordId: `msg-${convId}-1`,
+      conversationId: convId,
+      role,
+      content,
+      createdAt: new Date().toISOString(),
+      category: 'chat_message',
+      ...extra,
+    })
+  ),
+  getConversationMessages: jest.fn().mockResolvedValue([]),
+  deleteConversation: jest.fn().mockResolvedValue(true),
 }));
+
+import { app } from '../src/app';
 
 const AUTH_HEADER = { Authorization: 'Bearer test-token-test-user-1' };
 
 describe('Backend API - Secure Long-Term Memory Assistant Suite', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (searchMemories as jest.Mock).mockResolvedValue([]);
+    (storeMemory as jest.Mock).mockResolvedValue(undefined);
     (dynamodbService.getMemories as jest.Mock).mockResolvedValue([]);
     (dynamodbService.saveMemory as jest.Mock).mockImplementation((userId, content, category) =>
       Promise.resolve({
@@ -163,11 +201,11 @@ describe('Backend API - Secure Long-Term Memory Assistant Suite', () => {
     it('should augment user prompt with retrieved memories when memories exist', async () => {
       const mockAiReply = 'Your secret project code name is BlueTiger739.';
       (bedrockService.generateReply as jest.Mock).mockResolvedValueOnce(mockAiReply);
-      (dynamodbService.getMemories as jest.Mock).mockResolvedValueOnce([
+      (searchMemories as jest.Mock).mockResolvedValueOnce([
         {
-          userId: 'test-user-1',
-          recordId: 'mem-1',
+          memoryId: 'mem-1',
           content: 'My secret project code name is BlueTiger739.',
+          score: 0.95,
           createdAt: new Date().toISOString(),
         },
       ]);

@@ -1,0 +1,43 @@
+```yaml
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+    commands:
+      - echo "Installing backend dependencies..."
+      - cd backend
+      - npm ci
+      - cd ../frontend
+      - echo "Installing frontend dependencies..."
+      - npm ci
+      - cd ..
+
+  build:
+    commands:
+      - echo "Building backend..."
+      - cd backend
+      - npm run build
+      - npm prune --omit=dev
+      - zip -r ../backend-deployment.zip dist node_modules package.json
+      - cd ..
+
+      - echo "Building frontend..."
+      - cd frontend
+      - npm run build
+      - cd ..
+
+  post_build:
+    commands:
+      - echo "Deploying backend to Lambda..."
+      - aws lambda update-function-code --function-name long-term-memory-assistant-backend --zip-file fileb://backend-deployment.zip
+
+      - echo "Deploying frontend to S3..."
+      - aws s3 sync frontend/dist s3://${FRONTEND_BUCKET} --delete
+
+      - echo "Invalidating CloudFront cache..."
+      - aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DISTRIBUTION_ID} --paths "/*"
+
+      - echo "Deployment completed successfully!"
+```
